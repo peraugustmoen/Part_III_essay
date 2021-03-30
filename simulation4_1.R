@@ -7,7 +7,7 @@ library("latex2exp")
 library(sail)
 library(caret)
 
-# Simulation corresponding to figures 4,5
+# Simulation corresponding to figures 5,6
 
 N = 2000 # Number of independent simulations
 
@@ -59,8 +59,6 @@ Gamma = matrix(rnorm(q*p, mean=0, sd=1), nrow=q,ncol=p)
 sigma_nu = 1
 nu =  rnorm(n, mean=0, sd=sigma_nu) 
 
-require(doMC)
-registerDoMC(cores = 4)
 
 # How much we enlarge the penalty term chosen by CV:
 lambda_inflate = 1.2
@@ -73,7 +71,7 @@ for (r in 1:N) {
   X = H%*% Gamma + E 
   Y = X%*% beta + H %*% delta + nu 
   
-  # Naive lasso regression:
+  # Standard/Naive lasso regression:
   cvfit = cv.glmnet(y=Y,x=X, penalty.factor = col.norm(X),parallel = T,intercept=F)
   beta.hat.naive = as.vector(coef(cvfit,s= lambda_inflate*cvfit$lambda.min))[-1]
 
@@ -94,7 +92,7 @@ for (r in 1:N) {
   Y_tilde = F_matrix %*% Y
   
   
-  # Spectral decofounded lasso
+  # Trimmed Lasso (called "spectral")
   cvfit = cv.glmnet(y=Y_tilde,x=X_tilde,penalty.factor = col.norm(X_tilde), parallel = T,intercept=F,keep=T)
   beta.hat = as.vector(coef(cvfit,s= lambda_inflate*cvfit$lambda.min))[-1]
   
@@ -112,7 +110,7 @@ for (r in 1:N) {
   sigma_e_est = c(sigma_e_est, sigma_e_hat)
   sigma_e_est_fold = c(sigma_e_est_fold, sigma_e_folds)
   
-  # Naive debiasing
+  # Standard/Naive debiasing
   
   # Inference on beta_1
   naiveinternallasso1CV = cv.glmnet(y=X[,1],x=X[,-1],penalty.factor = col.norm(X[,-1]),parallel = T,intercept=F)
@@ -127,7 +125,7 @@ for (r in 1:N) {
   est_sd_naive_1_vec = c(est_sd_naive_1_vec, est_sd_naive_1)
   
   
-  # Inference on beta_1 with doubly debiasing
+  # Inference on beta_1 with doubly debiased lasso
   svd_1 = fast.svd(X[,-1])
   d1 = svd_1$d
   tau1 = median(d1)
@@ -172,45 +170,50 @@ sigma2 = sigma_nu^2 + t(delta)%*%(diag(q)-Gamma %*%SigmaInv%*%t(Gamma))%*%delta
 
 # Saving plots:
 
+
+directory = "INSERT HERE"
+setwd(directory)
+
+
 # Histogram of sigma_hat
-dev.new(width=10,height=5,noRStudioGD = TRUE)
+filename = "simulation4_1.pdf"
+pdf(file = filename, width = 10, height = 5)
+
 par(mfrow=c(1,2),mar=c(4,4,4,4))
-hist(sigma_e_est,main=TeX("Histogram of $\\hat{\\sigma}$"), probability = TRUE,ylab="Density",xlab=TeX("$x$"),xlim=c(min(c(sigma_e_est,sigma_e_est_fold))-0.1,max(c(sigma_e_est,sigma_e_est_fold))))
+hist(sigma_e_est,breaks=25,main=TeX("Histogram of $\\hat{\\sigma}$. $\ n=200,q=30,\\sigma_{E}=1$"), probability = TRUE,ylab="Density",xlab=TeX("$x$"),xlim=c(min(c(sigma_e_est,sigma_e_est_fold))-0.1,max(c(sigma_e_est,sigma_e_est_fold))))
 abline(v = sigma_nu)
 abline(v = sqrt(sigma2),lty=2)
-hist(sigma_e_est_fold, main=TeX("Histogram of $\\hat{\\sigma}_{fold}$"),probability = TRUE,ylab="Density",xlab=TeX("$x$"),xlim=c(min(c(sigma_e_est,sigma_e_est_fold))-0.1,max(c(sigma_e_est,sigma_e_est_fold))))
+hist(sigma_e_est_fold, breaks=15,main=TeX("Histogram of $\\hat{\\sigma}_{fold}$ $\ n=200,q=30,\\sigma_{E}=1$"),probability = TRUE,ylab="Density",xlab=TeX("$x$"),xlim=c(min(c(sigma_e_est,sigma_e_est_fold))-0.1,max(c(sigma_e_est,sigma_e_est_fold))))
 abline(v = sigma_nu)
 abline(v = sqrt(sigma2),lty=2)
-quartz.save(file="/Users/peraugust/Documents/cambridge/essay/simulations/simulation4_1.jpeg",type="jpeg",dpi=300)
+dev.off()
+
+
 
 
 # Histogram of t statistics
-dev.new(width=10,height=10,noRStudioGD = TRUE)
+filename = "simulation4_11.pdf"
+pdf(file = filename, width = 10, height = 10)
 par(mfrow=c(2,1),mar=c(4,4,4,4))
 
 max_x = max(abs(c((beta_1_DD_vec-beta[1])/est_sd_1_vec,(beta_1_DD_vec-beta[1])/est_sd_1_fold_vec)))
-#hist((beta_1_DD_vec), breaks=25, probability =T)
 hist((beta_1_DD_vec-beta[1])/est_sd_1_vec, breaks=100, probability = T, ylim=c(0,0.45),xlim=c(-max_x,max_x),
-     main = TeX("Histogram of $(\\hat{\\beta}_1- \\beta_1)/ \\hat{V}$"),ylab="Density",xlab="x")
+     main = TeX("Histogram of $(\\hat{\\beta}_1- \\beta_1)/ \\hat{V}$. $\ n=200,q=30,\\sigma_{E}=1$"),ylab="Density",xlab="x")
 dens1 = density((beta_1_DD_vec-beta[1])/est_sd_1_vec)
 lines(dens1$x, dens1$y,col=2,lwd=2)
 xs = seq(-5,5, length.out=1000)
 lines(xs, dnorm(xs),lwd=2)
 legend(x="topright", legend=c(TeX("N$(0,1)$ density"), "KDE"),lty=c(1,1),col=c(1,2),lwd=c(2,2))
 
-hist((beta_1_DD_vec-beta[1])/est_sd_1_fold_vec, breaks=40, probability = T,ylim=c(0,0.45),xlim=c(-max_x,max_x),
-     main = TeX("Histogram of $(\\hat{\\beta}_1- \\beta_1)/ \\hat{V}_{fold}$"),ylab="Density",xlab="x")
+hist((beta_1_DD_vec-beta[1])/est_sd_1_fold_vec, breaks=25, probability = T,ylim=c(0,0.45),xlim=c(-max_x,max_x),
+     main = TeX("Histogram of $(\\hat{\\beta}_1- \\beta_1)/ \\hat{V}_{fold}$.  $\ n=200,q=30,\\sigma_{E}=1$"),ylab="Density",xlab="x")
 dens2 = density((beta_1_DD_vec-beta[1])/est_sd_1_fold_vec)
 lines(dens2$x, dens2$y,col=2,lwd=2)
 xs = seq(-5,5, length.out=1000)
 lines(xs, dnorm(xs),lwd=2)
 legend(x="topright", legend=c(TeX("N$(0,1)$ density"), "KDE"),lty=c(1,1),col=c(1,2),lwd=c(2,2))
 
-quartz.save(file="/Users/peraugust/Documents/cambridge/essay/simulations/simulation4_2.jpeg",type="jpeg",dpi=300)
-
-
-#liz=list(beta,beta_1_DD_vec,beta_1_naive_DD_vec,est_sd_1_vec,est_sd_1_fold_vec,sigma_e_est,sigma_e_est_fold)
-#save(liz,file="/Users/peraugust/Documents/cambridge/essay/simulations/simulation4_1_data.dat")
+dev.off()
 
 
 # Other diagostics not included in essay
@@ -232,37 +235,3 @@ lines(xs, dnorm(xs))
 #Comparison of estimates of sigma_{\nu}
 hist(sigma_e_est_fold)
 hist(sigma_e_est)
-
-
-# Checking coverage of Doubly Debiased confidence interval (for \beta_1)
-CI1_left = beta_1_DD_vec -qnorm(0.975)*est_sd_1_vec
-CI1_right = beta_1_DD_vec +qnorm(0.975)*est_sd_1_vec
-coverage = 0
-for (i in 1:length(CI1_left)) {
-  if(beta[1] <=CI1_right[i]){
-    if(beta[1] >=CI1_left[i]){
-      coverage = coverage+1
-    }
-  }
-}
-
-coverage = coverage / length(CI1_left)
-
-
-# Checking coverage of Doubly Debiased confidence interval (for \beta_1) with 
-# alternative estimator of \sigma_{\nu}
-CI2_left = beta_1_DD_vec -qnorm(0.975)*est_sd_1_fold_vec
-CI2_right = beta_1_DD_vec +qnorm(0.975)*est_sd_1_fold_vec
-coverage_fold= 0
-for (i in 1:length(CI2_left)) {
-  if(beta[1] <=CI2_right[i]){
-    if(beta[1] >=CI2_left[i]){
-      coverage_fold = coverage_fold+1
-    }
-  }
-}
-
-coverage_fold = coverage_fold / length(CI2_left)
-coverage_fold
-
-
